@@ -7,6 +7,7 @@ import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.bots.DefaultBotOptions.ProxyType;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
@@ -34,21 +35,28 @@ public class CyrptoTeleBot extends TelegramLongPollingBot {
 		if (token == null) {
 			throw new IllegalArgumentException("Missing argument. use: --token=xxx");
 		}
-		var botOptions = new DefaultBotOptions();
-		if (proxy != null) {
-			botOptions.setProxyType(ProxyType.HTTP);
-			botOptions.setProxyHost(proxy);
-			botOptions.setProxyPort(0);
-		}
 		try {
 			TelegramBotsApi telegramBotsApi = new TelegramBotsApi(DefaultBotSession.class);
-			telegramBotsApi.registerBot(new CyrptoTeleBot(username, token));
+			telegramBotsApi.registerBot(new CyrptoTeleBot(username, token, proxy));
 		} catch (TelegramApiException e) {
 			e.printStackTrace();
 		}
 	}
 
-	String[] parseProxy(String url) {
+	static DefaultBotOptions createBotOptions(String proxy) {
+		var botOptions = new DefaultBotOptions();
+		if (proxy != null) {
+			String[] ps = parseProxy(proxy);
+			System.out.println("proxy: " + ps[0] + "/" + ps[1] + "/" + ps[2]);
+			botOptions.setProxyType(ps[0].equals("socks4") ? ProxyType.SOCKS4
+					: (ps[0].equals("socks5") ? ProxyType.SOCKS5 : ProxyType.HTTP));
+			botOptions.setProxyHost(ps[1]);
+			botOptions.setProxyPort(Integer.parseInt(ps[2]));
+		}
+		return botOptions;
+	}
+
+	static String[] parseProxy(String url) {
 		Pattern p = Pattern.compile("^(http|socks4|socks5)\\:\\/\\/([a-z0-9\\-\\.]+)\\:(\\d+)$");
 		Matcher m = p.matcher(url.toLowerCase());
 		if (!m.matches()) {
@@ -60,7 +68,8 @@ public class CyrptoTeleBot extends TelegramLongPollingBot {
 	private final String username;
 	private final String token;
 
-	public CyrptoTeleBot(String username, String token) {
+	public CyrptoTeleBot(String username, String token, String proxy) {
+		super(createBotOptions(proxy));
 		this.username = username;
 		this.token = token;
 	}
@@ -68,7 +77,17 @@ public class CyrptoTeleBot extends TelegramLongPollingBot {
 	@Override
 	public void onUpdateReceived(Update update) {
 		if (update.hasMessage()) {
-
+			String text = update.getMessage().getText();
+			log(">>> %s", text);
+			SendMessage message = new SendMessage();
+			message.setChatId(update.getMessage().getChatId().toString());
+			message.setText("RE: " + update.getMessage().getText());
+			try {
+				execute(message);
+				execute(message);
+			} catch (TelegramApiException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 
@@ -85,5 +104,10 @@ public class CyrptoTeleBot extends TelegramLongPollingBot {
 	public static class BotConfig {
 		public String username;
 		public String token;
+	}
+
+	static void log(String s, Object... args) {
+		System.out.printf(s, args);
+		System.out.println();
 	}
 }
